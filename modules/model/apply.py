@@ -80,6 +80,28 @@ def get_best_labels_greedy(selection):
     return argmax_selection
 
 
+def get_best_labels_beamsearch(selection, beam_width=100):
+
+    def get_possible_candidates(current_state):
+        cands = {1, 2, 3}
+        cands -= set(current_state)
+        if current_state:
+            cands.add(current_state[-1])
+        cands.add(0)
+        return cands
+
+    probs = torch.log_softmax(selection, dim=-1)
+    sequences = [[list(), 0.0]]
+    for row in probs:
+        new_sequences = list()
+        for seq, score in sequences:
+            for idx in get_possible_candidates(seq):
+                new_sequences.append([seq + [idx], score + row[idx].item()])
+        new_sequences.sort(key=lambda tup: -tup[1])
+        sequences = new_sequences[:beam_width]
+    return sequences[0][0]
+
+
 def selection_of_triples_with_argmax(y_hat: torch.tensor):
     """
     :param y_hat: prediction
@@ -195,7 +217,8 @@ def prediction2triples(prediction, texts, offsets_mapping, tokenized):
         triplets = [[] for _ in range(len(texts))]
 
         for item_id, rel_id in zip(nonzeros_item_ids, nonzeros_rel_ids):
-            pred_labels = get_best_labels_greedy(y_hat[item_id, :, rel_id, :])
+            # pred_labels = get_best_labels_greedy(y_hat[item_id, :, rel_id, :])
+            pred_labels = get_best_labels_beamsearch(y_hat[item_id, :, rel_id, :])
 
             # todo: uncomment to do minor alignment
             # pred_labels = postprocesing_labels(pred_labels)
@@ -206,9 +229,9 @@ def prediction2triples(prediction, texts, offsets_mapping, tokenized):
             triples = spans2triples(pred_labels, texts[item_id], offsets_mapping[item_id], tokenized[item_id].tokens)
 
             # triples = spans2triples_join_by_token(pred_labels,
-            #                                        texts[item_id],
-            #                                        offsets_mapping[item_id],
-            #                                        tokenized[item_id].tokens)
+            #                                       texts[item_id],
+            #                                       offsets_mapping[item_id],
+            #                                       tokenized[item_id].tokens)
 
             triplets[item_id].append([rel_id.item(), triples])
 
