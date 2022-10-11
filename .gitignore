@@ -2,3 +2,5 @@ local*
 .idea
 *.pyc
 *~
+data
+results
